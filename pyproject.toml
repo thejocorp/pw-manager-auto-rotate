@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "vaultrotate"
-version = "0.1.0"
+name = "pw-manager-auto-rotate"
+version = "0.2.0"
 description = "Rotate a secret everywhere it lives, from one vault, with verification and rollback."
 readme = "README.md"
 license = "MIT"
@@ -26,14 +26,14 @@ dependencies = []
 yaml = ["PyYAML>=6"]
 
 [project.scripts]
-vaultrotate = "vaultrotate.cli:_run"
+pwrotate = "pwrotate.cli:_run"
 
 [project.urls]
-Homepage = "https://github.com/thejocorp/vaultrotate"
-Issues = "https://github.com/thejocorp/vaultrotate/issues"
+Homepage = "https://github.com/thejocorp/pw-manager-auto-rotate"
+Issues = "https://github.com/thejocorp/pw-manager-auto-rotate/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["vaultrotate"]
+packages = ["pwrotate"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

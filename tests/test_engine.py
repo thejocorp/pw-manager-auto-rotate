@@ -1,6 +1,6 @@
 import pytest
-from vaultrotate import Engine, MemoryVault
-from vaultrotate.manifest import Place, Secret, Step
+from pwrotate import Engine, MemoryVault
+from pwrotate.manifest import Place, Secret, Step
 
 
 class FakeWorld:

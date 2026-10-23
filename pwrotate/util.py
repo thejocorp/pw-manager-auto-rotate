@@ -1,4 +1,4 @@
-"""Small helpers shared across vaultrotate: fingerprints, random values, backup names.
+"""Small helpers shared across pwrotate: fingerprints, random values, backup names.
 
 A secret value is never printed or logged. To tell whether two copies match, compare their
 fingerprints (the first 12 hex of a SHA-256) instead of the values themselves.

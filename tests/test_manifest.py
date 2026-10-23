@@ -1,5 +1,5 @@
 import json
-from vaultrotate.manifest import load
+from pwrotate.manifest import load
 
 
 def test_load_json(tmp_path):

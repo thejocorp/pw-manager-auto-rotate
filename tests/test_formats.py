@@ -1,5 +1,5 @@
 import pytest
-from vaultrotate import formats
+from pwrotate import formats
 
 
 def test_env_get_set_roundtrip():

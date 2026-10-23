@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import formats
+from .manifest import describe
 from .transports import for_host
 from .util import backup_suffix, fingerprint, random_value, same
 
@@ -100,7 +101,7 @@ class Engine:
             for p in s.places:
                 r.add(f"  {p.host}:{p.file}: would write")
             return r
-        self.vault.set(name, new)
+        self.vault.set(name, new, notes=describe(s))
         for p in s.places:
             self._write(p, new)
             r.add(f"  {p.host}:{p.file}: written")

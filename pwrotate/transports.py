@@ -1,7 +1,7 @@
-"""How vaultrotate reads and writes a file, and runs a command, on a host.
+"""How pwrotate reads and writes a file, and runs a command, on a host.
 
 A place names a host. The host string chooses the transport:
-  "local"            the machine vaultrotate runs on
+  "local"            the machine pwrotate runs on
   "ssh:user@host"    over SSH (keys set up already; no password prompts)
 
 Both expose the same three operations, so the engine does not care which is used. Add your own
@@ -9,6 +9,7 @@ Both expose the same three operations, so the engine does not care which is used
 """
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -30,15 +31,22 @@ class LocalTransport(Transport):
         return p.read_text() if p.is_file() else None
 
     def write(self, path, content, mode=None):
+        """Atomic replace that keeps the file's mode and owner: a service that reads the file
+        as its own user must still be able to read it afterwards. New files are private (600)."""
         p = Path(path)
-        tmp = p.with_name(p.name + ".vaultrotate.tmp")
-        tmp.write_text(content)
-        if mode is not None:
-            tmp.chmod(mode)
-        elif p.exists():
-            tmp.chmod(p.stat().st_mode & 0o7777)
-        else:
-            tmp.chmod(0o600)
+        tmp = p.with_name(p.name + ".pwrotate.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        old = p.stat() if p.exists() else None
+        tmp.chmod(mode if mode is not None else (old.st_mode & 0o7777 if old else 0o600))
+        if old is not None and (old.st_uid, old.st_gid) != (os.geteuid(), os.getegid()):
+            try:
+                os.chown(tmp, old.st_uid, old.st_gid)
+            except PermissionError:
+                tmp.unlink()
+                raise OSError(f"{path} belongs to uid {old.st_uid}:{old.st_gid}; writing it as another user "
+                              "would change its owner. Run pwrotate as root or as that user.")
         tmp.replace(p)
 
     def run(self, cmd, stdin=None, timeout=120):
@@ -56,14 +64,19 @@ class SshTransport(Transport):
         return r.stdout if r.returncode == 0 else None
 
     def write(self, path, content, mode=None):
-        # write to a temp file, set mode, move into place, all on the remote
-        tmp = _shq(path + ".vaultrotate.tmp")
+        # on the remote: private temp file, the old file's mode and owner copied onto it, then an
+        # atomic move into place (GNU coreutils --reference; plain chmod for an explicit mode)
+        tmp = _shq(path + ".pwrotate.tmp")
         q = _shq(path)
+        keep = (f"if [ -e {q} ]; then chmod --reference={q} {tmp} && "
+                f"{{ chown --reference={q} {tmp} 2>/dev/null || [ \"$(stat -c %u:%g {q})\" = \"$(id -u):$(id -g)\" ]; }}; fi && ")
         m = f"chmod {mode:o} {tmp} && " if mode is not None else ""
-        r = subprocess.run(self.base + [f"cat > {tmp} && {m}mv {tmp} {q}"],
+        r = subprocess.run(self.base + [f"umask 077 && cat > {tmp} && {keep}{m}mv {tmp} {q}"],
                            input=content, capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
-            raise OSError(f"remote write to {path} failed: {(r.stderr or r.stdout).strip()}")
+            subprocess.run(self.base + [f"rm -f {tmp}"], capture_output=True, timeout=60)
+            raise OSError(f"remote write to {path} failed (mode/owner could not be kept, or no access): "
+                          f"{(r.stderr or r.stdout).strip()}")
 
     def run(self, cmd, stdin=None, timeout=120):
         r = subprocess.run(self.base + [cmd], input=stdin, capture_output=True, text=True, timeout=timeout)

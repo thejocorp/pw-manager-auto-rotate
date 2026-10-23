@@ -1,7 +1,7 @@
 """Load the manifest: which secrets exist and, for each, where its copies live.
 
 JSON is read with the standard library. YAML is read only if PyYAML is installed
-(`pip install vaultrotate[yaml]`). No secret values are stored in the manifest, only names and
+(`pipx install "pw-manager-auto-rotate[yaml]"`). No secret values are stored in the manifest, only names and
 locations.
 """
 from __future__ import annotations
@@ -49,14 +49,31 @@ def _secret(d: dict) -> Secret:
     )
 
 
-def load(path) -> dict:
+def _data(path) -> dict:
     text = Path(path).read_text()
     if str(path).endswith((".yaml", ".yml")):
         try:
             import yaml
         except ImportError as e:
-            raise RuntimeError("YAML manifests need PyYAML: pip install vaultrotate[yaml]") from e
-        data = yaml.safe_load(text)
-    else:
-        data = json.loads(text)
-    return {s.name: s for s in (_secret(d) for d in data.get("secrets", []))}
+            raise RuntimeError('YAML manifests need PyYAML: pipx install "pw-manager-auto-rotate[yaml]"') from e
+        return yaml.safe_load(text) or {}
+    return json.loads(text)
+
+
+def load(path) -> dict:
+    """The secrets, by name."""
+    return {s.name: s for s in (_secret(d) for d in _data(path).get("secrets", []))}
+
+
+def load_settings(path) -> dict:
+    """The optional top-level `bitwarden:` block: `organization` and `collection` (names or ids)
+    for the vault items, and `sync: false` to skip `bw sync` before reading."""
+    return dict(_data(path).get("bitwarden") or {})
+
+
+def describe(secret: Secret) -> str:
+    """Where a secret lives, as plain lines. Written into the vault item's notes, so the
+    Bitwarden app shows every place that uses the secret."""
+    lines = [f"- {p.host}:{p.file} [{p.format}{' ' + p.key if p.key else ''}]" for p in secret.places]
+    lines += [f"- restart on {st.host}: {st.cmd}" for st in secret.restart]
+    return "\n".join(lines)
